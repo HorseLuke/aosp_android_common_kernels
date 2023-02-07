@@ -1305,6 +1305,13 @@ bool bpf_opcode_in_insntable(u8 code)
 }
 
 #ifndef CONFIG_BPF_JIT_ALWAYS_ON
+
+u64 __weak bpf_probe_read_kernel(void *dst, u32 size, const void *unsafe_ptr)
+{
+	memset(dst, 0, size);
+	return -EFAULT;
+}
+
 /**
  *	__bpf_prog_run - run eBPF program on a given context
  *	@regs: is the array of MAX_BPF_EXT_REG eBPF pseudo-registers
@@ -1596,6 +1603,16 @@ out:
 	LDST(W,  u32)
 	LDST(DW, u64)
 #undef LDST
+#define LDX_PROBE(SIZEOP, SIZE)							\
+	LDX_PROBE_MEM_##SIZEOP:							\
+		bpf_probe_read_kernel(&DST, SIZE, (const void *)(long) SRC);	\
+		CONT;
+	LDX_PROBE(B,  1)
+	LDX_PROBE(H,  2)
+	LDX_PROBE(W,  4)
+	LDX_PROBE(DW, 8)
+#undef LDX_PROBE
+
 	STX_XADD_W: /* lock xadd *(u32 *)(dst_reg + off16) += src_reg */
 		atomic_add((u32) SRC, (atomic_t *)(unsigned long)
 			   (DST + insn->off));
